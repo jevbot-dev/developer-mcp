@@ -5,12 +5,17 @@
 // archive, no git), keeps the catalog, metadata and transcripts, and swaps the
 // new copy in whole. WWDC_REPO points at an existing clone instead, which is
 // then used as-is and never downloaded or replaced.
+//
+// The archive is someone else's and follows their latest commit, so nothing in
+// it is trusted: only regular files are kept (a symlink named transcript.json
+// could point at ~/.ssh), sizes are capped, and every read stays inside the
+// data directory, whatever path the catalog names.
 
 import { execFile } from 'node:child_process'
 import { createWriteStream, existsSync } from 'node:fs'
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, open, readdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join, relative } from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { promisify } from 'node:util'
@@ -18,6 +23,10 @@ import { promisify } from 'node:util'
 const run = promisify(execFile)
 const UPSTREAM = 'guitaripod/wwdc-sessions'
 const STALE_AFTER_MS = 7 * 24 * 3600 * 1000
+// About 27 MB downloaded and 72 MB kept today; the caps leave room to grow.
+const MAX_ARCHIVE_BYTES = 200e6
+const MAX_KEPT_BYTES = 500e6
+const MAX_FILE_BYTES = 20e6
 
 export const managed = !process.env.WWDC_REPO
 export const dataDir = managed
@@ -33,6 +42,43 @@ const listeners = new Set()
 
 /** Called after a new copy is swapped in, so caches can drop the old one. */
 export function onSwap(fn) { listeners.add(fn) }
+
+/**
+ * A file in the data directory, by its path relative to it. Refuses anything
+ * that resolves outside — `..`, an absolute path, a symlink — and anything
+ * larger than a transcript could reasonably be.
+ */
+export async function readData(path) {
+  const full = join(dataDir, path)
+  const [root, real] = await Promise.all([realpath(dataDir), realpath(full)])
+  const inside = relative(root, real)
+  if (!inside || inside.startsWith('..') || isAbsolute(inside)) throw new Error(`refusing to read outside the data: ${path}`)
+  const file = await open(real, 'r')
+  try {
+    const { size, isFile } = await file.stat().then(st => ({ size: st.size, isFile: st.isFile() }))
+    if (!isFile || size > MAX_FILE_BYTES) throw new Error(`refusing to read ${path}: not a plain file under ${MAX_FILE_BYTES / 1e6} MB`)
+    return await file.readFile('utf8')
+  } finally {
+    await file.close()
+  }
+}
+
+/** Only directories and plain files of sane size; throws at the first thing that isn't. */
+export async function checkTree(dir) {
+  let total = 0
+  const walk = async at => {
+    for (const entry of await readdir(at, { withFileTypes: true })) {
+      const path = join(at, entry.name)
+      if (entry.isDirectory()) { await walk(path); continue }
+      if (!entry.isFile()) throw new Error(`the archive holds something other than a plain file: ${relative(dir, path)}`)
+      const { size } = await lstat(path)
+      if (size > MAX_FILE_BYTES) throw new Error(`the archive holds an oversized file: ${relative(dir, path)}`)
+      total += size
+      if (total > MAX_KEPT_BYTES) throw new Error('the archive is larger than expected')
+    }
+  }
+  await walk(dir)
+}
 
 export function hasData() {
   return existsSync(join(dataDir, 'catalog.json'))
@@ -101,11 +147,15 @@ async function fetchCopy(commit) {
     const res = await fetch(`https://codeload.github.com/${UPSTREAM}/tar.gz/${commit}`)
     if (!res.ok || !res.body) throw new Error(`GitHub answered ${res.status} for the archive`)
     const body = Readable.fromWeb(res.body)
-    body.on('data', chunk => { progress.receivedBytes += chunk.length })
+    body.on('data', chunk => {
+      progress.receivedBytes += chunk.length
+      if (progress.receivedBytes > MAX_ARCHIVE_BYTES) body.destroy(new Error('the archive is larger than expected'))
+    })
     await pipeline(body, createWriteStream(archive))
     // Only what the tools read: the catalog, and each session's metadata and transcript.
     await run('/usr/bin/tar', ['-xzf', archive, '-C', incoming, '--strip-components', '1',
       '*/catalog.json', '*/sessions/*/*/metadata.json', '*/sessions/*/*/transcript.json'])
+    await checkTree(incoming)
     if (!existsSync(join(incoming, 'catalog.json'))) throw new Error('the archive had no catalog.json')
     await writeFile(join(incoming, 'source.json'),
       JSON.stringify({ repo: UPSTREAM, commit, fetchedAt: new Date().toISOString() }))

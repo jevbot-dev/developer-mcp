@@ -18,9 +18,9 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { dataDir, dataWithin, managed, progress, refreshIfStale, source } from './data.mjs'
 import { grep, metadataOf, search, session, timeURL, transcriptOf } from './sessions.mjs'
+import pkg from '../package.json' with { type: 'json' }
 
 const run = promisify(execFile)
-const VERSION = '0.2.0'
 const APP_ID = 'developer.apple.wwdc-Release'
 const APP_PATHS = ['/Applications/Developer.app', join(homedir(), 'Applications/Developer.app')]
 
@@ -87,7 +87,7 @@ const filters = {
 let lastOpenRequest = null
 
 const server = new McpServer(
-  { name: 'developer-mcp', title: 'Developer', version: VERSION, icons: await appIcon() },
+  { name: 'developer-mcp', title: 'Developer', version: pkg.version, icons: await appIcon() },
   { instructions: INSTRUCTIONS },
 )
 

@@ -1,14 +1,13 @@
 // Search over the catalog and transcripts: ranking, caption hits, filters.
 
-import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { dataDir, onSwap } from './data.mjs'
+import { onSwap, readData } from './data.mjs'
 
 let catalog = null
 onSwap(() => { catalog = null })
 
 export async function sessions() {
-  catalog ??= JSON.parse(await readFile(join(dataDir, 'catalog.json'), 'utf8')).sessions
+  catalog ??= JSON.parse(await readData('catalog.json')).sessions
   return catalog
 }
 
@@ -20,12 +19,12 @@ export async function session(id) {
 
 export async function transcriptOf(s) {
   try {
-    return JSON.parse(await readFile(join(dataDir, s.path, 'transcript.json'), 'utf8')).segments ?? []
+    return JSON.parse(await readData(join(s.path, 'transcript.json'))).segments ?? []
   } catch { return [] }
 }
 
 export async function metadataOf(s) {
-  return JSON.parse(await readFile(join(dataDir, s.path, 'metadata.json'), 'utf8'))
+  return JSON.parse(await readData(join(s.path, 'metadata.json')))
 }
 
 /** year: "2025" or "2023-2026"; event: exact; topic: substring, any topic. */

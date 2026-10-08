@@ -1,0 +1,54 @@
+# Build the release from the tagged commit, attest where it came from, publish.
+#
+# The zip is reproducible (scripts/build.mjs), so anyone can rebuild a tag with
+# `npm ci && npm run package` and get the same sha256, and check the release
+# with `gh attestation verify <zip> -R jevbot-dev/developer-mcp`.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions: {}
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write      # create the release
+      id-token: write      # sign the attestation
+      attestations: write  # store it
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - name: Tag matches package.json
+        run: |
+          version=$(node -p "require('./package.json').version")
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME, package.json $version"; exit 1; }
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+      - run: npm ci
+      - run: npm run package
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: release/developer-mcp-${{ env.VERSION }}.zip
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          zip=release/developer-mcp-$VERSION.zip
+          sha=$(cut -d' ' -f1 "$zip.sha256")
+          {
+            echo "Developer.app 的 MCP 桥接包，给 Jevbot 等 agent 用：搜索 WWDC 讲座和字幕，在 Developer 里打开到某一秒。"
+            echo
+            echo "- \`developer-mcp-$VERSION.zip\`：内含 \`developer-mcp/server.mjs\`，在 Jevbot 自带的 Node（v24）上通过 stdio 运行"
+            echo "- sha256 \`$sha\`"
+            echo "- 由 GitHub Actions 从 \`$GITHUB_SHA\` 构建，附构建证明：\`gh attestation verify developer-mcp-$VERSION.zip -R $GITHUB_REPOSITORY\`"
+            echo "- 可复现：在这个标签上执行 \`npm ci && npm run package\`，得到的 sha256 相同"
+            echo "- 包里只有代码。字幕数据（© Apple，来自 guitaripod/wwdc-sessions）在首次使用时下载，约 27 MB"
+          } > notes.md
+          gh release create "$GITHUB_REF_NAME" "$zip" "$zip.sha256" --title "Developer MCP $VERSION" --notes-file notes.md
+          echo "sha256 $sha" >> "$GITHUB_STEP_SUMMARY"

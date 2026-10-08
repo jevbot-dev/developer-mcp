@@ -24,7 +24,7 @@ Developer.app 没有 App Intents，也没有脚本接口。所以这个包从外
 
 ## 运行
 
-- 通过 stdio 运行，由宿主拉起。在 Jevbot 里用的是它自带的 Node（v24）。
+- 通过 stdio 运行，由宿主拉起，需要 Node 24 或更新的版本。
 - 只调用系统自带的程序：`/usr/bin/open`、`tar`、`sips`、`defaults`。
 - `open_at` 用 `open -b developer.apple.wwdc-Release <url>?time=N`。直接 `open` 网址会被默认浏览器接走。
 
@@ -35,15 +35,6 @@ Developer.app 没有 App Intents，也没有脚本接口。所以这个包从外
 - 第一次使用时下载这个仓库的归档（约 27 MB），只保留 catalog、metadata 和 transcript，放在 `~/Library/Application Support/developer-mcp/wwdc-sessions`。
 - 每 7 天检查一次上游有没有更新，有更新就在后台整体替换。
 - 设置环境变量 `WWDC_REPO` 时，直接使用那份本地 clone，不下载。
-
-## 安全
-
-包里只有代码；字幕数据来自第三方，跟随上游的最新提交，所以不信任数据里的任何东西：
-
-- 解压后只保留普通文件。遇到符号链接或其他特殊文件，整份数据都拒绝使用。否则一个名叫 `transcript.json` 的符号链接，就能让服务读出 `~/.ssh` 里的文件。
-- 限制下载包、单个文件和解压后总量的大小。
-- 每次读文件都核对实际路径，必须在数据目录里面。catalog 里写成 `../` 的路径会被拒绝。
-- 字幕文本会原样交给 agent，宿主应当把它当成不可信内容处理。
 
 ## 开发与发布
 
@@ -56,8 +47,7 @@ npm run package      # 再生成 release/developer-mcp-<版本>.zip 和 .sha256
 
 **发布**：
 1. 改 `package.json` 的版本号，提交。
-2. 推送标签 `v<版本>`。GitHub Actions（`.github/workflows/release.yml`）会从这个标签构建、生成构建证明，并发布 Release。
-3. 把 sha256 填进 jevbot-mac 的 `Runtime/apps-store/catalog.json`（条目 `developer-mcp`）。
+2. 推送标签 `v<版本>`。GitHub Actions（`.github/workflows/release.yml`）会从这个标签构建、生成构建证明，并发布 Release。Release 里带有 zip、`.sha256`，以及写好校验值的商店条目片段 `.catalog.json`。
 
 **核对一个发布包**：
 
@@ -67,5 +57,3 @@ git checkout v<版本> && npm ci && npm run package                          # �
 ```
 
 zip 是可复现的：条目不压缩，时间戳和权限固定。所以同一份源码和 lockfile，在任何机器上构建出来的字节都相同。
-
-本机开发时，Jevbot 的配置在 `~/Library/Application Support/Jevbot/mcp-apps/developer.apple.wwdc-Release.json`，其中 `stdio` 指向 Jevbot 自带的 Node 和本仓库的 `dist/developer-mcp/server.mjs`。

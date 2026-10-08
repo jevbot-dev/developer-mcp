@@ -3,7 +3,9 @@
 // a single developer-mcp/ folder.
 //
 //   npm run build      dist/developer-mcp/server.mjs
-//   npm run package    + release/developer-mcp-<version>.zip and its sha256
+//   npm run package    + release/developer-mcp-<version>.zip, its .sha256, and
+//                      .catalog.json: the `download` entry for jevbot-mac's
+//                      Runtime/apps-store/catalog.json, hashes filled in
 //
 // The archive is reproducible: the same source and lockfile give the same
 // bytes on any machine, so a release can be rebuilt and compared. Entries are
@@ -85,7 +87,16 @@ if (process.argv.includes('--zip')) {
     { name: 'developer-mcp/server.mjs', data: readFileSync(`${folder}/server.mjs`) },
   ])
   writeFileSync(out, archive)
-  const sha256 = createHash('sha256').update(archive).digest('hex')
+  const hash = data => createHash('sha256').update(data).digest('hex')
+  const sha256 = hash(archive)
   writeFileSync(`${out}.sha256`, `${sha256}  developer-mcp-${version}.zip\n`)
-  console.log(`${out}\nsha256 ${sha256}`)
+  const download = {
+    url: `https://github.com/jevbot-dev/developer-mcp/releases/download/v${version}/developer-mcp-${version}.zip`,
+    sha256,
+    format: 'zip',
+    folder: 'developer-mcp',
+    files: { 'server.mjs': hash(readFileSync(`${folder}/server.mjs`)) },
+  }
+  writeFileSync(`release/developer-mcp-${version}.catalog.json`, JSON.stringify({ version, download }, null, 2) + '\n')
+  console.log(`${out}\nsha256 ${sha256}\nrelease/developer-mcp-${version}.catalog.json`)
 }

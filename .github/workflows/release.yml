@@ -48,7 +48,8 @@ jobs:
             echo "- sha256 \`$sha\`"
             echo "- 由 GitHub Actions 从 \`$GITHUB_SHA\` 构建，附构建证明：\`gh attestation verify developer-mcp-$VERSION.zip -R $GITHUB_REPOSITORY\`"
             echo "- 可复现：在这个标签上执行 \`npm ci && npm run package\`，得到的 sha256 相同"
+            echo "- \`developer-mcp-$VERSION.catalog.json\`：jevbot-mac \`Runtime/apps-store/catalog.json\` 里 \`developer-mcp\` 条目的 \`version\` 和 \`download\`，可直接替换"
             echo "- 包里只有代码。字幕数据（© Apple，来自 guitaripod/wwdc-sessions）在首次使用时下载，约 27 MB"
           } > notes.md
-          gh release create "$GITHUB_REF_NAME" "$zip" "$zip.sha256" --title "Developer MCP $VERSION" --notes-file notes.md
-          echo "sha256 $sha" >> "$GITHUB_STEP_SUMMARY"
+          gh release create "$GITHUB_REF_NAME" "$zip" "$zip.sha256" "release/developer-mcp-$VERSION.catalog.json" --title "Developer MCP $VERSION" --notes-file notes.md
+          { echo "sha256 \`$sha\`"; echo; echo '```json'; cat "release/developer-mcp-$VERSION.catalog.json"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

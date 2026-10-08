@@ -2,7 +2,7 @@
 
 [Developer](https://apps.apple.com/app/apple-developer/id640199958) 的 MCP 桥接包，给 Jevbot 等 agent 用：可以搜索 WWDC 讲座（2014–2026，包括 Tech Talks 和 Meet with Apple）的字幕，再在 Developer 里打开到某一秒。
 
-Developer.app 没有 App Intents，也没有脚本接口。所以这个包从外面替它对 agent 说话，按 [桥接服务约定](https://github.com/jevbot-dev/jevbot-mac/blob/main/docs/app-bridge-contract.md)：
+Developer.app 没有 App Intents，也没有脚本接口。所以这个包从外面替它对 agent 说话：
 
 - 检索直接读字幕数据（通道 `data`）
 - 打开走 Developer 的 universal link（通道 `link`）

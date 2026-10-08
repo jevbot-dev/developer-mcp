@@ -1,4 +1,4 @@
-// Search over the catalog and transcripts — the parts of wwdc.py the server uses.
+// Search over the catalog and transcripts: ranking, caption hits, filters.
 
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'

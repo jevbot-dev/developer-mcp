@@ -1,11 +1,12 @@
 # Developer MCP
 
-[Developer](https://apps.apple.com/app/apple-developer/id640199958) 的 MCP 桥接包，给 Jevbot 等 agent 用：可以搜索 WWDC 讲座（2014–2026，包括 Tech Talks 和 Meet with Apple）的字幕，再在 Developer 里打开到某一秒。
+[Developer](https://apps.apple.com/app/apple-developer/id640199958) 的 MCP 桥接包，给 Jevbot 等 agent 用：可以搜索 WWDC 讲座（2014–2026，包括 Tech Talks 和 Meet with Apple）的字幕，在 Developer 里打开到某一秒，再按播放。
 
 Developer.app 没有 App Intents，也没有脚本接口。所以这个包从外面替它对 agent 说话：
 
 - 检索直接读字幕数据（通道 `data`）
 - 打开走 Developer 的 universal link（通道 `link`）
+- 播放走辅助功能（通道 `ax`），按完读回播放器状态
 
 ## 工具
 
@@ -16,16 +17,18 @@ Developer.app 没有 App Intents，也没有脚本接口。所以这个包从外
 | `transcript` | 读一段时间范围内的字幕 | `data` |
 | `show` | 单个 session 的元数据和相关资源 | `data` |
 | `open_at` | 在 Developer 里打开某个 session，定位到某一秒，不自动播放 | `link`，开环 |
+| `play` | 等到那个 session 的页面出现，没在播才按播放，再读回是否在播 | `ax`，读回确认 |
 | `status` | 数据状态、Developer 是否已安装、最近一次发出的打开请求 | `data` |
 
-- 全部只读。
+- 除 `play` 以外全部只读。`play` 只改变播放状态，不改动任何数据；已经在播时不会再按，所以不会误按成暂停。
 - 每个工具的 `_meta["dev.jevbot/bridge"]` 写明它走的通道，以及结果能不能确认。
 - `open_at` 发出链接后读不到反馈，所以返回 `"verified": false`。
 
 ## 运行
 
 - 通过 stdio 运行，由宿主拉起，需要 Node 24 或更新的版本。
-- 只调用系统自带的程序：`/usr/bin/open`、`tar`、`sips`、`defaults`。
+- 只调用系统自带的程序：`/usr/bin/open`、`tar`、`sips`、`defaults`、`osascript`。
+- `play` 需要辅助功能权限。Jevbot 拉起桥接器时会隔离权限，所以它用不上 Jevbot 的授权，要在「系统设置 › 隐私与安全性 › 辅助功能」里单独允许。没有权限时，工具会直接说明，不会假装播放成功。
 - `open_at` 用 `open -b developer.apple.wwdc-Release <url>?time=N`。直接 `open` 网址会被默认浏览器接走。
 
 ## 数据

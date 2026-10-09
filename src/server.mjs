@@ -5,7 +5,8 @@
 // The app has no intents and no scripting, so this follows the bridge contract
 // (jevbot-mac docs/app-bridge-contract.md): lookups read the WWDC transcripts
 // directly (channel `data`), and opening hands the session's universal link to
-// the app (channel `link`), which says nothing back.
+// the app (channel `link`), which says nothing back. Playing presses the
+// player's control through accessibility (channel `ax`) and reads it back.
 
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -18,6 +19,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { dataDir, dataWithin, managed, progress, refreshIfStale, source } from './data.mjs'
 import { grep, metadataOf, search, session, timeURL, transcriptOf } from './sessions.mjs'
+import { play } from './player.mjs'
 import pkg from '../package.json' with { type: 'json' }
 
 const run = promisify(execFile)
@@ -28,6 +30,9 @@ const APP_PATHS = ['/Applications/Developer.app', join(homedir(), 'Applications/
 // a page. `open_at` does bring the Developer app forward — like turning to a
 // page, not like editing one.
 const LOOKING = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+// Playing is not a lookup (the bridge contract counts it out of read-only), but
+// it changes nothing that stays, and pressing it twice is still just playing.
+const PLAYING = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false }
 
 /** How a tool reaches the app, and whether its result can be confirmed. */
 const bridge = (channel, verify) => ({ 'dev.jevbot/bridge': { version: 1, channel, verify } })
@@ -151,7 +156,7 @@ server.registerTool('transcript', {
 })
 
 server.registerTool('open_at', {
-  description: 'Ask the Developer app to open the session, ready to start at `seconds`. It does not press play; the user does.\n\n'
+  description: 'Ask the Developer app to open the session, ready to start at `seconds`. It does not press play; `play` does.\n\n'
     + 'The link is handed to the app and nothing comes back, so the result says what was sent, not what the app shows.',
   inputSchema: { session_id: z.string(), seconds: z.number().default(0) },
   annotations: LOOKING, _meta: bridge('link', 'none'),
@@ -165,8 +170,26 @@ server.registerTool('open_at', {
   lastOpenRequest = { id: s.id, title: s.title, seconds: Math.floor(seconds), url }
   return reply({
     sent: url, session: s.title, at: clock(seconds), verified: false,
-    note: "Asked the Developer app to open this session at this time; whether it did can't be read back. Playing is the user's to press.",
+    note: "Asked the Developer app to open this session at this time; whether it did can't be read back. It is not playing until `play`.",
   })
+})
+
+server.registerTool('play', {
+  description: 'Start playing in the Developer app. With session_id, waits up to 8 seconds for that session\'s page (as after `open_at`) and plays only there.\n\n'
+    + 'Presses play only when it is not already playing, then reads the player back: `playing` is what the app shows. '
+    + 'Needs Accessibility permission for this server, which it does not share with Jevbot.',
+  inputSchema: { session_id: z.string().optional() },
+  annotations: PLAYING, _meta: bridge('ax', 'result'),
+}, async ({ session_id }) => {
+  if (!developerApp()) throw new Error('The Developer app is not installed; it is free on the Mac App Store.')
+  let title = ''
+  if (session_id) { await ready(); title = (await session(session_id)).title }
+  const r = await play(APP_ID, title)
+  if (!r.trusted) throw new Error('This server has no Accessibility permission. Ask the user to allow it in System Settings › Privacy & Security › Accessibility; it does not share Jevbot\'s.')
+  if (!r.running) throw new Error('The Developer app is not running. Open the session with `open_at` first.')
+  if (!r.page) throw new Error(`The Developer app is not showing "${title}". Open it with \`open_at\` first.`)
+  if (!r.player) throw new Error('The page shows no player to press.')
+  return reply({ session: title || null, playing: r.after === 1, pressed: r.pressed, verified: true })
 })
 
 await server.connect(new StdioServerTransport())

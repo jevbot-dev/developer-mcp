@@ -42,7 +42,7 @@ jobs:
           zip=release/developer-mcp-$VERSION.zip
           sha=$(cut -d' ' -f1 "$zip.sha256")
           {
-            echo "Developer.app 的 MCP 桥接包，给 Jevbot 等 agent 用：搜索 WWDC 讲座和字幕，在 Developer 里打开到某一秒。"
+            echo "Developer.app 的 MCP 桥接包，给 Jevbot 等 agent 用：搜索 WWDC 讲座和字幕，在 Developer 里打开到某一秒、按播放。"
             echo
             echo "- \`developer-mcp-$VERSION.zip\`：内含 \`developer-mcp/server.mjs\`，在 Jevbot 自带的 Node（v24）上通过 stdio 运行"
             echo "- sha256 \`$sha\`"

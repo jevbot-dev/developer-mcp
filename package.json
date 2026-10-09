@@ -1,8 +1,8 @@
 {
   "name": "developer-mcp",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
-  "description": "Developer.app bridge for Jevbot: search WWDC transcripts, open a session at a second.",
+  "description": "Developer.app bridge for Jevbot: search WWDC transcripts, open a session at a second, play it.",
   "type": "module",
   "engines": {
     "node": ">=24"

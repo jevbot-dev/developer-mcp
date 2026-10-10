@@ -2,6 +2,7 @@
   "name": "developer-mcp",
   "version": "0.2.2",
   "private": true,
+  "license": "MIT",
   "description": "Developer.app bridge for Jevbot: search WWDC transcripts, open a session at a second, play it.",
   "type": "module",
   "engines": {
